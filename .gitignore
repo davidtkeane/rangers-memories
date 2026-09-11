@@ -1,0 +1,7 @@
+.DS_Store
+*.db
+*.db-wal
+*.db-shm
+logs/
+*.bak
+*.bak.*
