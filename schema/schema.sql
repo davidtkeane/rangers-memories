@@ -53,6 +53,34 @@ CREATE INDEX IF NOT EXISTS idx_conv_time    ON conversations(timestamp);
 -- ── JOIN ────────────────────────────────────────────────────────────────────
 -- Lives in memories.db. Points at rows in any other database.
 -- strength rises when the same link is written again — repetition reinforces.
+--
+-- 🔴 READ THIS BEFORE YOU SYNC ACROSS MACHINES
+--
+-- target_id is an autoincrement id from ONE machine's conversations.db. If you
+-- ever sync memories.db between machines but not conversations.db, a link
+-- written on machine A arrives on machine B pointing at B's row with the same
+-- number — a DIFFERENT exchange. It does not error. It silently resolves to
+-- the wrong conversation, which is worse than a dangling link.
+--
+-- Measured on a real three-machine fleet:
+--     A: 7,986 links / 8,130 rows   healthy
+--     B: 1,844 links /     0 rows   every link dangling
+--     C: 2,522 links / 1,378 rows   1,144+ wrong or dangling
+--
+-- ✅ RESOLVE BY NATURAL KEY INSTEAD: session_id + timestamp. Both are written
+--    by the same hook in the same instant, both are globally unique, and
+--    neither is machine-local. It returns the user+assistant PAIR, which is
+--    correct — a memory IS an exchange.
+--
+--    SELECT v.role, v.content
+--    FROM memory_links l
+--    JOIN conversations v
+--      ON v.session_id = l.session_id
+--     AND v.timestamp  = l.timestamp
+--    WHERE l.source_id = :memory_id;
+--
+--    (SQLite views cannot span ATTACHed databases, so this lives in a query
+--     or a helper script rather than a view.)
 CREATE TABLE IF NOT EXISTS memory_links (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp    TEXT,

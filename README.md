@@ -128,6 +128,41 @@ it, it appears because summaries list what they summarise.
 
 ---
 
+## 🔴 If you sync across machines, read this
+
+`memory_links.target_id` is an autoincrement id from **one** machine's
+`conversations.db`. Sync `memories.db` between machines without syncing
+`conversations.db` and a link written on machine A arrives on machine B
+pointing at B's row with the same number — **a different exchange.** It does
+not error. It resolves to the wrong conversation, silently.
+
+Measured on a real three-machine fleet:
+
+| machine | links | conversation rows | |
+|---|---:|---:|---|
+| A | 7,986 | 8,130 | healthy |
+| B | 1,844 | **0** | every link dangling |
+| C | 2,522 | 1,378 | 1,144+ wrong or dangling |
+
+**Resolve by natural key instead** — `session_id + timestamp`. Both are written
+by the same hook in the same instant, both are globally unique, neither is
+machine-local:
+
+```sql
+SELECT v.role, v.content
+FROM memory_links l
+JOIN conversations v
+  ON v.session_id = l.session_id
+ AND v.timestamp  = l.timestamp
+WHERE l.source_id = :memory_id;
+```
+
+It returns the **user + assistant pair**, which is correct: a memory *is* an
+exchange. On a single machine `target_id` works fine — this only bites the
+moment you add a second one.
+
+---
+
 ## What is not here
 
 Sync between machines, importance-scale tuning, and branching to extra databases
