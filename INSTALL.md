@@ -145,12 +145,24 @@ cat "$RM_HOME/logs/hook-failures.log" 2>/dev/null || echo "no failures logged"
 
 **Expect:** memories +1, conversations +2, memory_links +2, and no failure log.
 
-Then clean up the test rows and the fake transcript:
+Then clean up the test rows and the fake transcript. **Delete the links
+first** — removing the memory and conversation rows without them leaves two
+dangling links behind, which is the exact fault `schema.sql` warns about:
 
 ```bash
+sqlite3 "$RM_HOME/memories.db"      "DELETE FROM memory_links WHERE session_id='rmtest';"
 sqlite3 "$RM_HOME/memories.db"      "DELETE FROM memories WHERE content LIKE '%install test%';"
 sqlite3 "$RM_HOME/conversations.db" "DELETE FROM conversations WHERE content LIKE '%install test%';"
 rm -rf ~/.claude/projects/_rmtest
+```
+
+Confirm all three tables are back where they started — every count must be the
+value you saw before the test, and `memory_links` must not have grown:
+
+```bash
+sqlite3 "$RM_HOME/memories.db"      'SELECT COUNT(*) FROM memories;'
+sqlite3 "$RM_HOME/conversations.db" 'SELECT COUNT(*) FROM conversations;'
+sqlite3 "$RM_HOME/memories.db"      'SELECT COUNT(*) FROM memory_links;'
 ```
 
 ---

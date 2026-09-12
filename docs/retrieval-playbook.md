@@ -3,7 +3,7 @@
 **Written 11 Sep 2026, after it took four attempts to find a diagnosis that was sitting right there.**
 
 > **The principle:**
-> takes… it is our problem to find the data, it's not the data's fault, so we need to learn how to
+> *"It is our problem to find the data, it's not the data's fault, so we need to learn how to
 > find the data."*
 >
 > The memory works like human memory — on words and what happened, not on tags. A phrase like
@@ -112,4 +112,9 @@ sqlite3 "$DB" "SELECT id,date(timestamp),substr(content,1,200) FROM memories
 sqlite3 "$DB" "SELECT content FROM memories WHERE id=NNNNN;"
 
 # what the other machines have been doing
+sqlite3 "$DB" "SELECT source_machine, COUNT(*), max(date(timestamp))
+               FROM memories GROUP BY source_machine ORDER BY COUNT(*) DESC;"
+
+# integrity check across both databases
+~/.rangers-memories/rm-health.sh
 ```
