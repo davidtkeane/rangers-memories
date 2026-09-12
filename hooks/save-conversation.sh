@@ -51,15 +51,56 @@ jsonl=""
 [ -f "${jsonl:-}" ] || exit 0
 
 # ── last user + last assistant TEXT ─────────────────────────────────────────
-# NOTE: if the final entries are tool calls with no text block these come back
-# empty and the hook exits. That is correct — and it is why you cannot test
-# this mid-session. Test with a small fake .jsonl containing real text.
-last_user=$(grep '"type":"user"' "$jsonl" 2>/dev/null | tail -1 | jq -r '
+# Tool results are written to the transcript as type:"user" entries too, so the
+# LAST user entry is usually a tool_result carrying no text. Taking it blindly
+# loses every exchange that ended in tool use. Select the last user entry that
+# actually has text, then the last assistant text that appears AFTER it — that
+# pair belongs to the same exchange.
+#
+# The assistant's closing message may not be flushed to the transcript at the
+# instant Stop fires, so wait briefly for it. If it never arrives we save the
+# user half alone and log it: an incomplete memory is recoverable, a memory
+# pairing a question with the previous answer is quietly wrong forever.
+
+user_text_lines() {
+  jq -r 'input_line_number as $n | select(.type=="user")
+    | ((.message.content) as $c
+       | if ($c|type) == "string" then $c
+         else ([$c[]? | select(.type=="text") | .text] | join("")) end) as $t
+    | select(($t|length) > 0) | $n' "$jsonl" 2>/dev/null
+}
+
+asst_text_lines() {
+  jq -r 'input_line_number as $n | select(.type=="assistant")
+    | ([.message.content[]? | select(.type=="text") | .text] | join("")) as $t
+    | select(($t|length) > 0) | $n' "$jsonl" 2>/dev/null
+}
+
+u_line=$(user_text_lines | tail -1)
+
+a_line=""
+if [ -z "$u_line" ]; then
+  # nothing awaiting an answer — take any trailing assistant text, do not wait
+  a_line=$(asst_text_lines | tail -1)
+else
+  tries=0
+  while [ "$tries" -lt 10 ]; do
+    a_line=$(asst_text_lines | awk -v u="$u_line" '$1 > u' | tail -1)
+    [ -n "$a_line" ] && break
+    tries=$((tries + 1))
+    sleep 0.2 2>/dev/null || sleep 1
+  done
+fi
+
+[ -z "$a_line" ] && [ -n "$u_line" ] && logfail "no assistant text after user line $u_line in $jsonl — saved user half only"
+
+last_user=""
+last_asst=""
+[ -n "$u_line" ] && last_user=$(sed -n "${u_line}p" "$jsonl" | jq -r '
   if .message.content | type == "string" then .message.content
   else (.message.content // [] | map(select(.type=="text") | .text) | join("")) end // ""
 ' 2>/dev/null | cut -c1-4000)
-
-last_asst=$(grep '"type":"assistant"' "$jsonl" 2>/dev/null | tail -1 | jq -r '
+[ -n "$a_line" ] && last_asst=$(sed -n "${a_line}p" "$jsonl" | jq -r '
   [.message.content[]? | select(.type=="text") | .text] | join("") // ""
 ' 2>/dev/null | cut -c1-6000)
 

@@ -60,6 +60,23 @@ One thing to be clear about: **the hook itself is Claude Code specific.** It
 uses Claude Code's `Stop` event and reads its session transcripts. So you do not
 need Claude Code to *install* it — only to *use* it.
 
+### Or run the installer
+
+```bash
+./install.sh              # install, test end to end, report honestly
+./install.sh --check      # what is installed? changes nothing
+./install.sh --uninstall  # remove the hook, keep every database
+```
+
+Same steps as the runbook, one command. Safe to re-run — it never overwrites a
+database and never replaces `settings.json`. Once installed, `rm-health.sh`
+reports on the state of your databases, and is worth running against another
+machine's pair **before** merging it in:
+
+```bash
+~/.rangers-memories/rm-health.sh --source /path/to/incoming
+```
+
 ### Or do it by hand
 
 ```bash
